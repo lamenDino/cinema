@@ -1,3 +1,7 @@
+
+Cinemanello API
+
+
 import express from 'express';
 
 const app = express();
@@ -28,15 +32,15 @@ console.log('✅ Starting Cinemanello API...');
 // Manifest JSON
 const manifest = {
   "id": "org.cinema.cinemanello",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "name": "🎬 Cinemanello",
-  "description": "Film in sala INTERNAZIONALI - Aggiornamento 24h",
+  "description": "Film Popolari TMDB - Aggiornamento 24h",
   "types": ["movie"],
   "catalogs": [
     {
       "type": "movie",
       "id": "alcinema",
-      "name": "🍿 Al Cinema (Ultimi 20gg + Prossimi 7gg)"
+      "name": "🍿 Film Popolari"
     }
   ],
   "resources": ["catalog", "meta"],
@@ -51,40 +55,33 @@ let filmCache = null;
 let cacheTimestamp = 0;
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 ore in ms
 
-// ✅ Calcola date dinamiche
-function getDateRange() {
-  const today = new Date();
-  const startDate = new Date(today);
-  startDate.setDate(startDate.getDate() - 20);
-  
-  const endDate = new Date(today);
-  endDate.setDate(endDate.getDate() + 7);
-  
-  return {
-    gte: startDate.toISOString().split('T')[0],
-    lte: endDate.toISOString().split('T')[0]
-  };
-}
-
 // ✅ Fetch film da TMDB con parametri ottimizzati
 async function fetchFilmFromTMDB() {
   try {
-    const dates = getDateRange();
-    
-    console.log(`📅 Fetching films: ${dates.gte} to ${dates.lte}`);
+    console.log(`📅 Fetching popular films...`);
     
     const url = new URL(`${TMDB_BASE_URL}/discover/movie`);
     url.searchParams.append('api_key', TMDB_API_KEY);
-    url.searchParams.append('sort_by', 'release_date.desc');
-    url.searchParams.append('primary_release_date.gte', dates.gte);
-    url.searchParams.append('primary_release_date.lte', dates.lte);
-    url.searchParams.append('with_release_type', '2|3'); // Theatrical + Theatrical Limited
-    url.searchParams.append('language', 'en,it');  // English + Italian
-    url.searchParams.append('page', '1');
-    url.searchParams.append('per_page', '50');
-    url.searchParams.append('region', 'US,IT');  // USA + Italy theatrical releases
     
-    console.log(`🌍 Query: International theatrical releases (US + IT regions)`);
+    // 🎬 Parametri di ricerca specifici
+    url.searchParams.append('info', 'discover');
+    url.searchParams.append('tmdb_type', 'movie');
+    url.searchParams.append('sort_by', 'popularity.desc');
+    
+    // 📅 Release date: ultimi 20 giorni e prossimi 7 giorni
+    const today = new Date();
+    const from20DaysAgo = new Date(today.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const to7DaysLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    
+    url.searchParams.append('primary_release_date.gte', from20DaysAgo);
+    url.searchParams.append('primary_release_date.lte', to7DaysLater);
+    
+    // 🎭 Solo release cinematiche (2=Theatrical, 3=Theatrical Limited)
+    url.searchParams.append('with_release_type', '2|3');
+    url.searchParams.append('language', 'en,it');
+    url.searchParams.append('page', '1');
+    
+    console.log(`🌍 Query: Film cinematici (ultimi 20gg - prossimi 7gg) ordinati per popolarità`);
     
     const response = await fetch(url.toString());
     
@@ -104,7 +101,7 @@ async function fetchFilmFromTMDB() {
         name: movie.title,
         year: movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A',
         poster: `https://image.tmdb.org/t/p/w500${movie.poster_path}`,
-        description: movie.overview || 'Film in sala',
+        description: movie.overview || 'Film popolare',
         releaseInfo: movie.release_date || 'N/A'
       }));
     
@@ -240,7 +237,7 @@ app.get('/status', async (req, res) => {
   
   res.json({
     status: "OK",
-    api: "Cinemanello v1.0.3 (International Theatrical Releases)",
+    api: "Cinemanello v1.0.4 (Popular Movies)",
     tmdb: "✅ Configured",
     cache_films: filmCache ? filmCache.length : 0,
     cache_age_minutes: Math.round((Date.now() - cacheTimestamp) / 60000),
