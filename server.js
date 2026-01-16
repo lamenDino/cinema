@@ -1,10 +1,11 @@
-// server.js - Render entry point (start command)
+// server.js - Render entry point (ES Module version)
 import handler from './api/index.js';
+import http from 'http';
 
 const PORT = process.env.PORT || 3000;
 
 // Crea un semplice server HTTP
-const server = require('http').createServer(async (req, res) => {
+const server = http.createServer(async (req, res) => {
   // Passa a Next.js-style handler
   await handler(
     { 
