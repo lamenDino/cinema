@@ -30,13 +30,13 @@ const manifest = {
   "id": "org.cinema.cinemanello",
   "version": "1.0.4",
   "name": "🎬 Cinemanello",
-  "description": "Film Popolari TMDB - Aggiornamento 24h",
+  "description": "Film Cinematici TMDB - Aggiornamento 24h",
   "types": ["movie"],
   "catalogs": [
     {
       "type": "movie",
       "id": "alcinema",
-      "name": "🍿 Film Popolari"
+      "name": "🍿 Film Cinematici"
     }
   ],
   "resources": ["catalog", "meta"],
@@ -54,14 +54,12 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 ore in ms
 // ✅ Fetch film da TMDB con parametri ottimizzati
 async function fetchFilmFromTMDB() {
   try {
-    console.log(`📅 Fetching popular films...`);
+    console.log(`📅 Fetching theatrical films...`);
     
     const url = new URL(`${TMDB_BASE_URL}/discover/movie`);
     url.searchParams.append('api_key', TMDB_API_KEY);
     
     // 🎬 Parametri di ricerca specifici
-    url.searchParams.append('info', 'discover');
-    url.searchParams.append('tmdb_type', 'movie');
     url.searchParams.append('sort_by', 'popularity.desc');
     
     // 📅 Release date: ultimi 20 giorni e prossimi 7 giorni
@@ -76,8 +74,9 @@ async function fetchFilmFromTMDB() {
     url.searchParams.append('with_release_type', '2|3');
     url.searchParams.append('language', 'en,it');
     url.searchParams.append('page', '1');
+    url.searchParams.append('per_page', '50');
     
-    console.log(`🌍 Query: Film cinematici (ultimi 20gg - prossimi 7gg) ordinati per popolarità`);
+    console.log(`🌍 Query: Film cinematici (${from20DaysAgo} - ${to7DaysLater}) - 50 risultati per popolarità`);
     
     const response = await fetch(url.toString());
     
@@ -89,15 +88,15 @@ async function fetchFilmFromTMDB() {
     
     // Trasforma risultati TMDB in formato Stremio
     const metas = data.results
-      .filter(movie => movie.poster_path) // Solo film con poster
-      .slice(0, 100) // Max 100 film
+      .filter(movie => movie.poster_path)
+      .slice(0, 100)
       .map(movie => ({
         id: `tmdb:${movie.id}`,
         type: 'movie',
         name: movie.title,
         year: movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A',
         poster: `https://image.tmdb.org/t/p/w500${movie.poster_path}`,
-        description: movie.overview || 'Film popolare',
+        description: movie.overview || 'Film in uscita',
         releaseInfo: movie.release_date || 'N/A'
       }));
     
@@ -110,7 +109,6 @@ async function fetchFilmFromTMDB() {
     return metas;
   } catch (error) {
     console.error('❌ TMDB Fetch Error:', error);
-    // Ritorna cache vecchio se disponibile
     if (filmCache) {
       console.log('⚠️  Using stale cache');
       return filmCache;
@@ -130,7 +128,6 @@ app.get('/catalog/:type/:id.json', async (req, res) => {
   
   if (type === 'movie' && id === 'alcinema') {
     try {
-      // Controlla se cache è scaduto (24 ore)
       const isExpired = (Date.now() - cacheTimestamp) > CACHE_DURATION;
       
       if (!filmCache || isExpired) {
@@ -142,7 +139,7 @@ app.get('/catalog/:type/:id.json', async (req, res) => {
       
       return res.json({
         metas: filmCache || [],
-        cacheMaxAge: 86400 // 24 ore
+        cacheMaxAge: 86400
       });
     } catch (error) {
       console.error('Catalog handler error:', error);
@@ -157,7 +154,6 @@ app.get('/catalog/:type/:id.json', async (req, res) => {
 app.get('/meta/:type/:id.json', async (req, res) => {
   const { type, id } = req.params;
   
-  // Estrai TMDB ID dall'id (formato: tmdb:12345)
   const tmdbId = id.split(':')[1];
   
   if (!tmdbId) {
@@ -167,7 +163,6 @@ app.get('/meta/:type/:id.json', async (req, res) => {
   try {
     console.log(`📽️ Fetching meta for: ${id}`);
     
-    // Fetch dettagli da TMDB
     const response = await fetch(
       `${TMDB_BASE_URL}/movie/${tmdbId}?api_key=${TMDB_API_KEY}&language=it,en&append_to_response=credits`
     );
@@ -179,7 +174,6 @@ app.get('/meta/:type/:id.json', async (req, res) => {
     
     const movie = await response.json();
     
-    // Estrai director e cast
     let director = [];
     let cast = [];
     
@@ -205,7 +199,7 @@ app.get('/meta/:type/:id.json', async (req, res) => {
       description: movie.overview,
       releaseInfo: movie.release_date,
       runtime: movie.runtime,
-      imdbRating: movie.vote_average / 2, // TMDB usa 0-10, Stremio vuole 0-5
+      imdbRating: movie.vote_average / 2,
       director: director,
       cast: cast,
       genre: movie.genres ? movie.genres.map(g => g.name) : [],
@@ -233,7 +227,7 @@ app.get('/status', async (req, res) => {
   
   res.json({
     status: "OK",
-    api: "Cinemanello v1.0.4 (Popular Movies)",
+    api: "Cinemanello v1.0.4",
     tmdb: "✅ Configured",
     cache_films: filmCache ? filmCache.length : 0,
     cache_age_minutes: Math.round((Date.now() - cacheTimestamp) / 60000),
@@ -258,7 +252,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy' });
 });
 
-// ✅ 🚀 CRUCIALE: Start server on port
+// ✅ 🚀 Start server on port
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
