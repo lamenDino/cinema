@@ -28,7 +28,7 @@ console.log('✅ Starting Cinemanello API...');
 // Manifest JSON
 const manifest = {
   "id": "org.cinema.cinemanello",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "name": "🎬 Cinemanello",
   "description": "Film in sala da TMDB - Aggiornamento 24h",
   "types": ["movie"],
@@ -260,6 +260,15 @@ app.post('/refresh', async (req, res) => {
 // ✅ Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy' });
+});
+
+// ✅ 🚀 CRUCIALE: Start server on port
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📌 Manifest: http://localhost:${PORT}/manifest.json`);
+  console.log(`🎬 Cinemanello ready!`);
 });
 
 export default app;
