@@ -28,9 +28,9 @@ console.log('✅ Starting Cinemanello API...');
 // Manifest JSON
 const manifest = {
   "id": "org.cinema.cinemanello",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "name": "🎬 Cinemanello",
-  "description": "Film in sala da TMDB - Aggiornamento 24h",
+  "description": "Film in sala INTERNAZIONALI - Aggiornamento 24h",
   "types": ["movie"],
   "catalogs": [
     {
@@ -75,13 +75,16 @@ async function fetchFilmFromTMDB() {
     
     const url = new URL(`${TMDB_BASE_URL}/discover/movie`);
     url.searchParams.append('api_key', TMDB_API_KEY);
-    url.searchParams.append('sort_by', 'popularity.desc');
+    url.searchParams.append('sort_by', 'release_date.desc');
     url.searchParams.append('primary_release_date.gte', dates.gte);
     url.searchParams.append('primary_release_date.lte', dates.lte);
     url.searchParams.append('with_release_type', '2|3'); // Theatrical + Theatrical Limited
-    url.searchParams.append('language', 'it-IT');
+    url.searchParams.append('language', 'en,it');  // English + Italian
     url.searchParams.append('page', '1');
     url.searchParams.append('per_page', '50');
+    url.searchParams.append('region', 'US,IT');  // USA + Italy theatrical releases
+    
+    console.log(`🌍 Query: International theatrical releases (US + IT regions)`);
     
     const response = await fetch(url.toString());
     
@@ -173,7 +176,7 @@ app.get('/meta/:type/:id.json', async (req, res) => {
     
     // Fetch dettagli da TMDB
     const response = await fetch(
-      `${TMDB_BASE_URL}/movie/${tmdbId}?api_key=${TMDB_API_KEY}&language=it-IT&append_to_response=credits`
+      `${TMDB_BASE_URL}/movie/${tmdbId}?api_key=${TMDB_API_KEY}&language=it,en&append_to_response=credits`
     );
     
     if (!response.ok) {
@@ -237,7 +240,7 @@ app.get('/status', async (req, res) => {
   
   res.json({
     status: "OK",
-    api: "Cinemanello v1.0.2 (TMDB Dynamic + Meta)",
+    api: "Cinemanello v1.0.3 (International Theatrical Releases)",
     tmdb: "✅ Configured",
     cache_films: filmCache ? filmCache.length : 0,
     cache_age_minutes: Math.round((Date.now() - cacheTimestamp) / 60000),
