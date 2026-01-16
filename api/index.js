@@ -16,10 +16,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// ✅ Check API Key all'avvio
+if (!process.env.TMDB_API_KEY) {
+  console.error('❌ TMDB_API_KEY not found in environment variables!');
+  process.exit(1);
+}
+
+console.log('✅ TMDB_API_KEY configured');
+console.log('✅ Starting Cinemanello API...');
+
 // Manifest JSON
 const manifest = {
   "id": "org.cinema.cinemanello",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "name": "🎬 Cinemanello",
   "description": "Film in sala da TMDB - Aggiornamento 24h",
   "types": ["movie"],
@@ -30,7 +39,7 @@ const manifest = {
       "name": "🍿 Al Cinema (Ultimi 20gg + Prossimi 7gg)"
     }
   ],
-  "resources": ["catalog"],
+  "resources": ["catalog", "meta"],
   "contactEmail": "your@email.com"
 };
 
@@ -148,6 +157,75 @@ app.get('/catalog/:type/:id.json', async (req, res) => {
   res.status(404).json({ error: 'Catalog not found' });
 });
 
+// ✅ META HANDLER - Dettagli film
+app.get('/meta/:type/:id.json', async (req, res) => {
+  const { type, id } = req.params;
+  
+  // Estrai TMDB ID dall'id (formato: tmdb:12345)
+  const tmdbId = id.split(':')[1];
+  
+  if (!tmdbId) {
+    return res.status(404).json({ error: 'Invalid ID format' });
+  }
+  
+  try {
+    console.log(`📽️ Fetching meta for: ${id}`);
+    
+    // Fetch dettagli da TMDB
+    const response = await fetch(
+      `${TMDB_BASE_URL}/movie/${tmdbId}?api_key=${TMDB_API_KEY}&language=it-IT&append_to_response=credits`
+    );
+    
+    if (!response.ok) {
+      console.log(`⚠️ Meta not found for ID: ${id}`);
+      return res.status(404).json({ error: 'Movie not found' });
+    }
+    
+    const movie = await response.json();
+    
+    // Estrai director e cast
+    let director = [];
+    let cast = [];
+    
+    if (movie.credits && movie.credits.crew) {
+      director = movie.credits.crew
+        .filter(person => person.job === 'Director')
+        .map(person => person.name);
+    }
+    
+    if (movie.credits && movie.credits.cast) {
+      cast = movie.credits.cast
+        .slice(0, 5)
+        .map(person => person.name);
+    }
+    
+    const meta = {
+      id: id,
+      type: 'movie',
+      name: movie.title,
+      year: movie.release_date ? new Date(movie.release_date).getFullYear() : null,
+      poster: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : null,
+      background: movie.backdrop_path ? `https://image.tmdb.org/t/p/w780${movie.backdrop_path}` : null,
+      description: movie.overview,
+      releaseInfo: movie.release_date,
+      runtime: movie.runtime,
+      imdbRating: movie.vote_average / 2, // TMDB usa 0-10, Stremio vuole 0-5
+      director: director,
+      cast: cast,
+      genre: movie.genres ? movie.genres.map(g => g.name) : [],
+      country: movie.production_countries ? movie.production_countries.map(c => c.iso_3166_1) : [],
+      created: new Date().toISOString(),
+      updated: new Date().toISOString()
+    };
+    
+    console.log(`✅ Meta fetched: ${movie.title}`);
+    res.json({ meta });
+  } catch (error) {
+    console.error('Meta handler error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ✅ Root redirect
 app.get('/', (req, res) => {
   res.redirect('/manifest.json');
@@ -159,7 +237,7 @@ app.get('/status', async (req, res) => {
   
   res.json({
     status: "OK",
-    api: "Cinemanello v1.0.1 (TMDB Dynamic)",
+    api: "Cinemanello v1.0.2 (TMDB Dynamic + Meta)",
     tmdb: "✅ Configured",
     cache_films: filmCache ? filmCache.length : 0,
     cache_age_minutes: Math.round((Date.now() - cacheTimestamp) / 60000),
