@@ -1,4 +1,3 @@
-// api/index.js
 import express from 'express';
 
 const app = express();
@@ -22,65 +21,130 @@ const manifest = {
   "id": "org.cinema.cinemanello",
   "version": "1.0.0",
   "name": "🎬 Cinemanello",
-  "description": "Film in sala e streaming",
+  "description": "Film in sala da TMDB - Aggiornamento 24h",
   "types": ["movie"],
   "catalogs": [
     {
       "type": "movie",
       "id": "alcinema",
-      "name": "🍿 Al Cinema"
+      "name": "🍿 Al Cinema (Ultimi 20gg + Prossimi 7gg)"
     }
   ],
   "resources": ["catalog"],
   "contactEmail": "your@email.com"
 };
 
-// ✅ I tuoi film
-const miei_film = [
-  {
-    id: "tmdb:939243",
-    type: "movie",
-    name: "People We Meet on Vacation",
-    year: 2026,
-    poster: "https://image.tmdb.org/t/p/w500/xzZaU0MN6L9oc1pl0RUXSB7hWwD.jpg",
-    description: "Poppy's a free spirit. Alex loves a plan..."
-  },
-  {
-    id: "tmdb:1315303",
-    type: "movie",
-    name: "Primate",
-    year: 2026,
-    poster: "https://image.tmdb.org/t/p/w500/5Q1zdYe9PYEXMGELzjfjyx8Eb7H.jpg",
-    description: "Lucy, a college student, along with her friends..."
-  },
-  {
-    id: "tmdb:533528",
-    type: "movie",
-    name: "Greenland 2: Migration",
-    year: 2026,
-    poster: "https://image.tmdb.org/t/p/w500/poster.jpg",
-    description: "La continuazione di Greenland..."
+const TMDB_API_KEY = process.env.TMDB_API_KEY;
+const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+
+// ✅ Cache con TTL (24 ore)
+let filmCache = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 ore in ms
+
+// ✅ Calcola date dinamiche
+function getDateRange() {
+  const today = new Date();
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - 20);
+  
+  const endDate = new Date(today);
+  endDate.setDate(endDate.getDate() + 7);
+  
+  return {
+    gte: startDate.toISOString().split('T')[0],
+    lte: endDate.toISOString().split('T')[0]
+  };
+}
+
+// ✅ Fetch film da TMDB con parametri ottimizzati
+async function fetchFilmFromTMDB() {
+  try {
+    const dates = getDateRange();
+    
+    console.log(`📅 Fetching films: ${dates.gte} to ${dates.lte}`);
+    
+    const url = new URL(`${TMDB_BASE_URL}/discover/movie`);
+    url.searchParams.append('api_key', TMDB_API_KEY);
+    url.searchParams.append('sort_by', 'popularity.desc');
+    url.searchParams.append('primary_release_date.gte', dates.gte);
+    url.searchParams.append('primary_release_date.lte', dates.lte);
+    url.searchParams.append('with_release_type', '2|3'); // Theatrical + Theatrical Limited
+    url.searchParams.append('language', 'it-IT');
+    url.searchParams.append('page', '1');
+    url.searchParams.append('per_page', '50');
+    
+    const response = await fetch(url.toString());
+    
+    if (!response.ok) {
+      throw new Error(`TMDB API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Trasforma risultati TMDB in formato Stremio
+    const metas = data.results
+      .filter(movie => movie.poster_path) // Solo film con poster
+      .slice(0, 100) // Max 100 film
+      .map(movie => ({
+        id: `tmdb:${movie.id}`,
+        type: 'movie',
+        name: movie.title,
+        year: movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A',
+        poster: `https://image.tmdb.org/t/p/w500${movie.poster_path}`,
+        description: movie.overview || 'Film in sala',
+        releaseInfo: movie.release_date || 'N/A'
+      }));
+    
+    console.log(`✅ Fetched ${metas.length} films from TMDB`);
+    
+    // Aggiorna cache
+    filmCache = metas;
+    cacheTimestamp = Date.now();
+    
+    return metas;
+  } catch (error) {
+    console.error('❌ TMDB Fetch Error:', error);
+    // Ritorna cache vecchio se disponibile
+    if (filmCache) {
+      console.log('⚠️  Using stale cache');
+      return filmCache;
+    }
+    return [];
   }
-];
+}
 
 // ✅ Endpoint manifest
 app.get('/manifest.json', (req, res) => {
   res.json(manifest);
 });
 
-// ✅ HANDLER CATALOGO - IL PIÙ IMPORTANTE!
-app.get('/catalog/:type/:id.json', (req, res) => {
+// ✅ HANDLER CATALOGO CON CACHE
+app.get('/catalog/:type/:id.json', async (req, res) => {
   const { type, id } = req.params;
   
-  console.log(`Catalogo richiesto: tipo=${type}, id=${id}`);
-  
   if (type === 'movie' && id === 'alcinema') {
-    return res.json({
-      metas: miei_film
-    });
+    try {
+      // Controlla se cache è scaduto (24 ore)
+      const isExpired = (Date.now() - cacheTimestamp) > CACHE_DURATION;
+      
+      if (!filmCache || isExpired) {
+        console.log('🔄 Cache expired or empty, fetching fresh data...');
+        await fetchFilmFromTMDB();
+      } else {
+        console.log(`💾 Using cached data (${Math.round((Date.now() - cacheTimestamp) / 1000)}s old)`);
+      }
+      
+      return res.json({
+        metas: filmCache || [],
+        cacheMaxAge: 86400 // 24 ore
+      });
+    } catch (error) {
+      console.error('Catalog handler error:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
   }
   
-  // Se catalogo non trovato
   res.status(404).json({ error: 'Catalog not found' });
 });
 
@@ -90,12 +154,34 @@ app.get('/', (req, res) => {
 });
 
 // ✅ Status endpoint
-app.get('/status', (req, res) => {
+app.get('/status', async (req, res) => {
+  const isExpired = (Date.now() - cacheTimestamp) > CACHE_DURATION;
+  
   res.json({
     status: "OK",
-    api: "Cinemanello v1.0.0",
-    tmdb: "✅ Configured"
+    api: "Cinemanello v1.0.1 (TMDB Dynamic)",
+    tmdb: "✅ Configured",
+    cache_films: filmCache ? filmCache.length : 0,
+    cache_age_minutes: Math.round((Date.now() - cacheTimestamp) / 60000),
+    cache_expired: isExpired,
+    next_refresh: new Date(cacheTimestamp + CACHE_DURATION).toISOString()
   });
+});
+
+// ✅ Endpoint per refresh manuale
+app.post('/refresh', async (req, res) => {
+  console.log('🔄 Manual refresh requested');
+  const films = await fetchFilmFromTMDB();
+  res.json({
+    status: "Refreshed",
+    films_count: films.length,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ✅ Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'healthy' });
 });
 
 export default app;
