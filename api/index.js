@@ -1,7 +1,3 @@
-
-Cinemanello API
-
-
 import express from 'express';
 
 const app = express();
