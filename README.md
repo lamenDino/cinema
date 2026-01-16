@@ -1,19 +1,23 @@
-# 🎬 Stremio Al Cinema Addon
+# 🎬 Cinemanello - Addon Stremio TMDB
 
-Addon Stremio che mostra i **film in sala** da TMDB (Italia).
+Addon Stremio che recupera **film in sala** direttamente da **TheMovieDatabase (TMDB)** con aggiornamento automatico ogni 24 ore.
 
-## 🚀 Deploy Veloce
+## 🎯 Caratteristiche
 
-### Vercel (Consigliato)
-1. Fork questo repo
-2. Vai su vercel.com → Import GitHub
-3. Aggiungi `TMDB_API_KEY` nelle Environment Variables
-4. Deploy automatico!
+✅ Film in sala (ultimi 20 giorni + prossimi 7 giorni)
+✅ Solo release cinematiche (Theatrical + Limited)
+✅ Cache 24 ore (no overload TMDB API)
+✅ Aggiornamento automatico
+✅ Multi-lingua support (IT)
 
-### Render
-1. Fork repo
-2. Crea Web Service → Connect GitHub
-3. Imposta `TMDB_API_KEY`
-4. Deploy!
+## 🚀 Deploy
 
-## 📱 Installa in Stremio
+### 1. Ottieni API Key TMDB
+
+- Vai su: https://www.themoviedb.org/settings/api
+- Registrati/Login
+- Crea una nuova API Key v3
+
+### 2. Setup su Render
+
+**Environment Variables:**
