@@ -1,6 +1,6 @@
 {
   "name": "cinemanello",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Addon Stremio per film in sala da TMDB",
   "type": "module",
   "main": "api/index.js",
