@@ -28,15 +28,20 @@ console.log('✅ Starting Cinemanello API...');
 // Manifest JSON
 const manifest = {
   "id": "org.cinema.cinemanello",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "name": "🎬 Cinemanello",
-  "description": "Film Cinematici TMDB - Aggiornamento 24h",
+  "description": "Film Italiani TMDB - Ultimi 30 giorni",
   "types": ["movie"],
   "catalogs": [
     {
       "type": "movie",
       "id": "alcinema",
-      "name": "🍿 Film Cinematici"
+      "name": "🍿 Film Recenti"
+    },
+    {
+      "type": "movie",
+      "id": "alcinema_date",
+      "name": "📅 Film per Data"
     }
   ],
   "resources": ["catalog", "meta"],
@@ -63,12 +68,12 @@ async function fetchFilmFromTMDB() {
     url.searchParams.append('sort_by', 'popularity.desc');
     url.searchParams.append('region', 'IT');
     
-    // 📅 Release date: ultimi 3 mesi
+    // 📅 Release date: ultimi 30 giorni
     const today = new Date();
-    const from3MonthsAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const from30DaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const toToday = today.toISOString().split('T')[0];
     
-    url.searchParams.append('primary_release_date.gte', from3MonthsAgo);
+    url.searchParams.append('primary_release_date.gte', from30DaysAgo);
     url.searchParams.append('primary_release_date.lte', toToday);
     
     // 🎭 Tutti i release type (2=Theatrical, 3=Theatrical Limited, 4=Digital, 5=Physical, 6=TV)
@@ -77,7 +82,7 @@ async function fetchFilmFromTMDB() {
     url.searchParams.append('page', '1');
     url.searchParams.append('per_page', '50');
     
-    console.log(`🌍 Query: Film italiani (${from3MonthsAgo} - ${toToday}) - Tutti i release type - 50 risultati per popolarità globale`);
+    console.log(`🌍 Query: Film italiani (${from30DaysAgo} - ${toToday}) - Tutti i release type - Tutti i risultati per popolarità globale`);
     
     const response = await fetch(url.toString());
     
@@ -90,7 +95,6 @@ async function fetchFilmFromTMDB() {
     // Trasforma risultati TMDB in formato Stremio
     const metas = data.results
       .filter(movie => movie.poster_path)
-      .slice(0, 100)
       .map(movie => ({
         id: `tmdb:${movie.id}`,
         type: 'movie',
@@ -127,7 +131,7 @@ app.get('/manifest.json', (req, res) => {
 app.get('/catalog/:type/:id.json', async (req, res) => {
   const { type, id } = req.params;
   
-  if (type === 'movie' && id === 'alcinema') {
+  if (type === 'movie' && (id === 'alcinema' || id === 'alcinema_date')) {
     try {
       const isExpired = (Date.now() - cacheTimestamp) > CACHE_DURATION;
       
@@ -138,8 +142,18 @@ app.get('/catalog/:type/:id.json', async (req, res) => {
         console.log(`💾 Using cached data (${Math.round((Date.now() - cacheTimestamp) / 1000)}s old)`);
       }
       
+      // Ordina per data di uscita se richiesto
+      let metasToReturn = filmCache || [];
+      if (id === 'alcinema_date') {
+        metasToReturn = [...metasToReturn].sort((a, b) => {
+          const dateA = new Date(a.releaseInfo || '1970-01-01');
+          const dateB = new Date(b.releaseInfo || '1970-01-01');
+          return dateB - dateA; // Più recenti prima
+        });
+      }
+      
       return res.json({
-        metas: filmCache || [],
+        metas: metasToReturn,
         cacheMaxAge: 86400
       });
     } catch (error) {
