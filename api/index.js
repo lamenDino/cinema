@@ -54,29 +54,30 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 ore in ms
 // ✅ Fetch film da TMDB con parametri ottimizzati
 async function fetchFilmFromTMDB() {
   try {
-    console.log(`📅 Fetching theatrical films...`);
+    console.log(`📅 Fetching films from Italy (3 months)...`);
     
     const url = new URL(`${TMDB_BASE_URL}/discover/movie`);
     url.searchParams.append('api_key', TMDB_API_KEY);
     
     // 🎬 Parametri di ricerca specifici
     url.searchParams.append('sort_by', 'popularity.desc');
+    url.searchParams.append('region', 'IT');
     
-    // 📅 Release date: ultimi 20 giorni e prossimi 7 giorni
+    // 📅 Release date: ultimi 3 mesi
     const today = new Date();
-    const from20DaysAgo = new Date(today.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const to7DaysLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const from3MonthsAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const toToday = today.toISOString().split('T')[0];
     
-    url.searchParams.append('primary_release_date.gte', from20DaysAgo);
-    url.searchParams.append('primary_release_date.lte', to7DaysLater);
+    url.searchParams.append('primary_release_date.gte', from3MonthsAgo);
+    url.searchParams.append('primary_release_date.lte', toToday);
     
-    // 🎭 Solo release cinematiche (2=Theatrical, 3=Theatrical Limited)
-    url.searchParams.append('with_release_type', '2|3');
+    // 🎭 Tutti i release type (2=Theatrical, 3=Theatrical Limited, 4=Digital, 5=Physical, 6=TV)
+    url.searchParams.append('with_release_type', '2|3|4|5|6');
     url.searchParams.append('language', 'en,it');
     url.searchParams.append('page', '1');
     url.searchParams.append('per_page', '50');
     
-    console.log(`🌍 Query: Film cinematici (${from20DaysAgo} - ${to7DaysLater}) - 50 risultati per popolarità`);
+    console.log(`🌍 Query: Film italiani (${from3MonthsAgo} - ${toToday}) - Tutti i release type - 50 risultati per popolarità globale`);
     
     const response = await fetch(url.toString());
     
